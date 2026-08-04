@@ -1,10 +1,7 @@
-langchain 
-langchain_core 
-langchain-community 
-langchain-groq 
+langgraph
+langchain
+langchain-core
+langchain-groq
+langchain-community
 python-dotenv
-langchain_huggingface 
-faiss-cpu 
-pypdf 
-sentence-transformers
-openpyxl
+streamlit
