@@ -1,43 +1,61 @@
+import streamlit as st
 from typing import TypedDict, List
-from dotenv import load_dotenv
-import os
 
 from langchain_core.messages import HumanMessage
 from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, START, END
 
-# Load environment variables
-load_dotenv()
+# -----------------------------
+# Streamlit Page Configuration
+# -----------------------------
+st.set_page_config(
+    page_title="LangGraph Chatbot",
+    page_icon="🤖",
+    layout="centered"
+)
 
-# Get Groq API Key
-groq_api_key = os.getenv("GROQ_API_KEY")
+st.title("🤖 LangGraph Chatbot using Groq")
+st.write("Ask any question!")
 
-if not groq_api_key:
-    raise ValueError(
-        "GROQ_API_KEY not found. Please add it to your .env file."
-    )
+# -----------------------------
+# Get API Key from Streamlit Secrets
+# -----------------------------
+try:
+    groq_api_key = st.secrets["GROQ_API_KEY"]
+except Exception:
+    st.error("❌ GROQ_API_KEY not found.")
+    st.info("Go to **App Settings → Secrets** and add:")
+    st.code("""
+GROQ_API_KEY="your_groq_api_key"
+""")
+    st.stop()
 
-# Define State
-class AgentState(TypedDict):
-    messages: List[HumanMessage]
-
+# -----------------------------
 # Initialize LLM
-print("Initializing Groq LLM client...")
-
+# -----------------------------
 llm = ChatGroq(
     model_name="llama-3.3-70b-versatile",
     groq_api_key=groq_api_key
 )
 
-print("Groq LLM client initialized successfully.")
+# -----------------------------
+# LangGraph State
+# -----------------------------
+class AgentState(TypedDict):
+    messages: List[HumanMessage]
+    response: str
 
-# Node function
-def process(state: AgentState) -> AgentState:
+# -----------------------------
+# Node
+# -----------------------------
+def process(state: AgentState):
     response = llm.invoke(state["messages"])
-    print(f"\nAI: {response.content}")
+    state["response"] = response.content
     return state
 
+# -----------------------------
 # Build Graph
+# -----------------------------
 graph = StateGraph(AgentState)
 
 graph.add_node("process_node", process)
@@ -47,17 +65,46 @@ graph.add_edge("process_node", END)
 
 agent = graph.compile()
 
-# Chat Loop
-if __name__ == "__main__":
-    print("Type 'exit' to quit.\n")
+# -----------------------------
+# Chat History
+# -----------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    user_input = input("You: ")
+# Display previous messages
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-    while user_input.lower() != "exit":
-        agent.invoke({
-            "messages": [HumanMessage(content=user_input)]
-        })
+# -----------------------------
+# Chat Input
+# -----------------------------
+prompt = st.chat_input("Type your question...")
 
-        user_input = input("You: ")
+if prompt:
 
-    print("Goodbye!")
+    # Display user message
+    st.session_state.messages.append(
+        {"role": "user", "content": prompt}
+    )
+
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Invoke LangGraph
+    result = agent.invoke(
+        {
+            "messages": [HumanMessage(content=prompt)],
+            "response": ""
+        }
+    )
+
+    answer = result["response"]
+
+    # Display assistant message
+    with st.chat_message("assistant"):
+        st.markdown(answer)
+
+    st.session_state.messages.append(
+        {"role": "assistant", "content": answer}
+    )
